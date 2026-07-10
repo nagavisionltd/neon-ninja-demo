@@ -1,0 +1,6 @@
+{
+  "name": "Into the Darkness",
+  "description": "High-speed action-packed platformer with 3 levels of phase-shifting mechanics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
