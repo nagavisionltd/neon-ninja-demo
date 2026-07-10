@@ -13,8 +13,13 @@ interface TitleScreenProps {
 }
 
 // Beautifully animated classic retro 3D perspective grid & starfield background
-function RetroGridBackground() {
+function RetroGridBackground({ hasStarted }: { hasStarted: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hasStartedRef = useRef(hasStarted);
+
+  useEffect(() => {
+    hasStartedRef.current = hasStarted;
+  }, [hasStarted]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,6 +41,18 @@ function RetroGridBackground() {
       });
     }
 
+    const particles: { x: number; y: number; size: number; speedY: number; opacity: number; color: string }[] = [];
+    for (let i = 0; i < 25; i++) {
+      particles.push({
+        x: Math.random() * 800,
+        y: 200 + Math.random() * 200,
+        size: 1 + Math.random() * 2,
+        speedY: 0.25 + Math.random() * 0.65,
+        opacity: 0.15 + Math.random() * 0.55,
+        color: Math.random() > 0.5 ? '#00e5ff' : '#ff3b5f',
+      });
+    }
+
     const resize = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -43,12 +60,18 @@ function RetroGridBackground() {
         s.x = Math.random() * canvas.width;
         s.y = Math.random() * (canvas.height * 0.55);
       });
+      particles.forEach(p => {
+        p.x = Math.random() * canvas.width;
+        p.y = canvas.height * 0.55 + Math.random() * (canvas.height * 0.45);
+      });
     };
 
     resize();
     window.addEventListener('resize', resize);
 
     const render = () => {
+      const isSplash = !hasStartedRef.current;
+
       // Dark vintage arcade cabinet backdrop color
       ctx.fillStyle = '#020108';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -71,6 +94,45 @@ function RetroGridBackground() {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.01)';
       for (let sl = 0; sl < h; sl += 4) {
         ctx.fillRect(0, sl, w, 1.5);
+      }
+
+      // Render classic Synthwave Sun on splash screen with animated slice cuts
+      if (isSplash) {
+        const cx = w / 2;
+        const sunRadius = Math.min(w, h) * 0.16;
+        const sunY = horizon;
+
+        ctx.save();
+        // Create clipping path for half-circle of sun above horizon
+        ctx.beginPath();
+        ctx.arc(cx, sunY, sunRadius, Math.PI, 0);
+        ctx.clip();
+
+        // Sun gradient from hot neon yellow down to deep magenta/pink
+        const sunGrad = ctx.createLinearGradient(0, sunY - sunRadius, 0, sunY);
+        sunGrad.addColorStop(0, '#ffe600');
+        sunGrad.addColorStop(0.4, '#ff5100');
+        sunGrad.addColorStop(1, '#ff007f');
+
+        ctx.fillStyle = sunGrad;
+        ctx.shadowColor = '#ff007f';
+        ctx.shadowBlur = 25;
+        ctx.fillRect(cx - sunRadius, sunY - sunRadius, sunRadius * 2, sunRadius);
+
+        // Classic horizontal line-cut slices that get wider towards the bottom
+        ctx.fillStyle = '#020108'; // same as background
+        ctx.shadowBlur = 0;
+        const numSlices = 7;
+        const sliceProgress = (Date.now() * 0.001) % (1 / numSlices);
+        for (let i = 0; i < numSlices; i++) {
+          const relativePos = (i + sliceProgress * numSlices) / numSlices;
+          const sliceY = sunY - sunRadius * relativePos;
+          const sliceHeight = 2 + (1 - relativePos) * 10;
+          if (sliceY > sunY - sunRadius && sliceY < sunY) {
+            ctx.fillRect(cx - sunRadius - 10, sliceY, sunRadius * 2 + 20, sliceHeight);
+          }
+        }
+        ctx.restore();
       }
 
       // Neon Horizon Glowing Divider
@@ -112,8 +174,9 @@ function RetroGridBackground() {
         ctx.stroke();
       }
 
-      // 3D Scrolling Perspective Horizontal Lines
-      offset = (offset + 1.1) % 36;
+      // 3D Scrolling Perspective Horizontal Lines (Scrolls faster in splash screen)
+      const scrollSpeed = isSplash ? 1.8 : 1.1;
+      offset = (offset + scrollSpeed) % 36;
       for (let y = 0; y < h - horizon; y += 14) {
         const relativeY = (y + offset) / (h - horizon);
         const screenY = horizon + Math.pow(relativeY, 1.7) * (h - horizon);
@@ -125,6 +188,22 @@ function RetroGridBackground() {
         ctx.lineTo(w, screenY);
         ctx.stroke();
       }
+
+      // Render drifting/rising neon cyber particles from bottom to horizon
+      particles.forEach(p => {
+        if (p.x > w) p.x = Math.random() * w;
+        if (p.y > h || p.y < horizon) {
+          p.y = horizon + Math.random() * (h - horizon);
+          p.x = Math.random() * w;
+        }
+        p.y -= p.speedY * (isSplash ? 1.6 : 0.6);
+
+        ctx.fillStyle = p.color;
+        const distFade = (p.y - horizon) / (h - horizon);
+        ctx.globalAlpha = p.opacity * distFade * (isSplash ? 1.0 : 0.25);
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      });
+      ctx.globalAlpha = 1.0;
 
       ctx.shadowBlur = 0;
       animId = requestAnimationFrame(render);
@@ -394,6 +473,9 @@ function LevelPreviewImage({ levelId, featured }: { levelId: number; featured?: 
   }
 }
 
+const titleLetters1 = Array.from("INTO");
+const titleLetters2 = Array.from("DARKNESS");
+
 export default function TitleScreen({ unlockedLevels, bestSpeeds, onStartLevel }: TitleScreenProps) {
   const [hasStarted, setHasStarted] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -613,7 +695,7 @@ export default function TitleScreen({ unlockedLevels, bestSpeeds, onStartLevel }
   return (
     <div className="relative w-full min-h-screen bg-[#020108] text-white font-sans flex flex-col justify-between p-4 md:p-6 overflow-y-auto selection:bg-brand-orange selection:text-black pb-8">
       {/* Dynamic scrolling background with scanlines & retro horizon grid */}
-      <RetroGridBackground />
+      <RetroGridBackground hasStarted={hasStarted} />
 
       {/* Floating neon mist spheres */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-brand-cyan/5 blur-[120px] pointer-events-none" />
@@ -630,35 +712,98 @@ export default function TitleScreen({ unlockedLevels, bestSpeeds, onStartLevel }
           >
             {/* Publisher intro credit */}
             <div className="mb-2">
-              <span className="text-brand-cyan text-[10px] md:text-xs tracking-[0.4em] uppercase font-mono block mb-1 font-bold animate-pulse">
+              <motion.span 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 1, delay: 0.2 }}
+                className="text-brand-cyan text-[10px] md:text-xs tracking-[0.4em] uppercase font-mono block mb-1 font-bold animate-pulse"
+              >
                 NAGAXGAMES PRESENTS
-              </span>
-              <h1 className="text-5xl md:text-8xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white via-zinc-200 to-zinc-650 drop-shadow-[0_0_25px_rgba(255,255,255,0.06)] uppercase font-sans">
-                Into <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-pink via-brand-orange to-brand-cyan">Darkness</span>
+              </motion.span>
+              <h1 className="text-5xl md:text-8xl font-black tracking-tight uppercase font-sans select-none flex flex-wrap justify-center gap-x-4 md:gap-x-6">
+                <span className="flex">
+                  {titleLetters1.map((letter, i) => (
+                    <motion.span
+                      key={i}
+                      initial={{ opacity: 0, y: -40, rotateX: -90 }}
+                      animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                      transition={{
+                        type: "spring",
+                        damping: 10,
+                        stiffness: 100,
+                        delay: i * 0.08 + 0.3
+                      }}
+                      className="inline-block text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]"
+                    >
+                      {letter}
+                    </motion.span>
+                  ))}
+                </span>
+                <span className="flex">
+                  {titleLetters2.map((letter, i) => (
+                    <motion.span
+                      key={i}
+                      initial={{ opacity: 0, y: 40, rotateX: 90 }}
+                      animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                      transition={{
+                        type: "spring",
+                        damping: 10,
+                        stiffness: 100,
+                        delay: (titleLetters1.length + i) * 0.08 + 0.3
+                      }}
+                      className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-brand-pink via-brand-orange to-brand-cyan drop-shadow-[0_0_20px_rgba(255,59,95,0.6)]"
+                    >
+                      {letter}
+                    </motion.span>
+                  ))}
+                </span>
               </h1>
             </div>
 
-            <div className="mb-10">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 border border-zinc-800 bg-[#0a0515]/60 text-brand-orange text-xs font-mono uppercase tracking-[0.2em] rounded">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 1.2, duration: 0.5 }}
+              className="mb-10"
+            >
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 border border-zinc-800 bg-[#0a0515]/60 text-brand-orange text-xs font-mono uppercase tracking-[0.2em] rounded">
                 <Gamepad2 className="w-3.5 h-3.5 shrink-0" />
                 <span>16-BIT CLASSIC</span>
               </span>
-            </div>
+            </motion.div>
 
             {/* Pulsing Game Arcade Button */}
             <motion.button
               onClick={handlePressToStart}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.97 }}
-              className="group px-8 py-4 bg-gradient-to-r from-brand-pink via-brand-orange to-brand-cyan text-black font-extrabold text-sm md:text-base tracking-[0.3em] rounded-lg hover:shadow-[0_0_30px_rgba(255,100,0,0.4)] transition-all duration-300 cursor-pointer uppercase flex items-center gap-2"
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.95 }}
+              animate={{
+                boxShadow: [
+                  '0 0 15px rgba(255, 59, 95, 0.4)',
+                  '0 0 35px rgba(0, 229, 255, 0.7)',
+                  '0 0 15px rgba(255, 59, 95, 0.4)'
+                ],
+                scale: [1, 1.03, 1]
+              }}
+              transition={{
+                duration: 2.5,
+                repeat: Infinity,
+                ease: 'easeInOut'
+              }}
+              className="group px-10 py-5 bg-gradient-to-r from-brand-pink via-brand-orange to-brand-cyan text-black font-extrabold text-sm md:text-lg tracking-[0.3em] rounded-xl transition-all duration-300 cursor-pointer uppercase flex items-center gap-2 font-mono"
             >
               <span>PRESS TO START</span>
               <Play className="w-4 h-4 fill-current text-current" />
             </motion.button>
 
-            <p className="mt-10 text-zinc-500 text-[10px] md:text-xs max-w-sm mx-auto font-mono uppercase tracking-wider leading-relaxed">
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              transition={{ delay: 1.5, duration: 0.8 }}
+              className="mt-10 text-zinc-500 text-[10px] md:text-xs max-w-sm mx-auto font-mono uppercase tracking-wider leading-relaxed"
+            >
               Move with A/D or Arrow keys. Jump with W, change phase with Q. Use spacebar to slide dash!
-            </p>
+            </motion.p>
           </motion.div>
         </div>
       ) : (
